@@ -29,6 +29,15 @@
             var member = null;
             document.addEventListener('DOMContentLoaded', function(){
                 member = JSON.parse(sessionStorage.getItem("member"));
+                document.getElementById("name").value = member.name;
+                document.getElementById("email").value = member.email;
+                document.getElementById("phone").value = member.phone;
+                document.getElementById("country").value = member.city;
+                document.getElementById("address").value = member.address;
+                document.getElementById("securityQuestion").value = member.securityQuestion;
+                document.getElementById("securityAnswer").value = member.securityAnswer;
+                document.getElementById("age").value = member.age;
+                document.getElementById("income").value = member.income;
 
                 if(member.sla == 1) {
                     document.getElementById("serviceLevelAgreement").checked = true;
@@ -191,54 +200,94 @@
             }
 
             async function submitForm() {
-                var oldPassword = document.getElementById('oldPassword').value;
-                var password = document.getElementById("password").value;
-                var repassword = document.getElementById("repassword").value;
+                var oldPassword = document.getElementById('oldPassword').value.trim();
+                var password = document.getElementById("password").value.trim();
+                var repassword = document.getElementById("repassword").value.trim();
                 var ok = true;
-                console.log(oldPassword)
-                if (document.getElementById("profileForm").checkValidity()) {
-                    if (oldPassword != "" && password != "" && repassword != "") {
-                        var memberData = {
-                            id: member.id,
-                            password: oldPassword
-                        };
 
-                        await fetch(new Request('/api/verifyPassword',
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: 'Bearer ' + authToken
-                            },
-                            body: JSON.stringify(memberData)
-                        })).then(function (response) {
-                            return response.json();
-                        }).then(function (data) {
-                            if(data.success) {
-                                if (password != repassword) {
-                                    //Check if password and repassword is the same
-                                    document.getElementById("password").style.borderColor = "#E34234";
-                                    document.getElementById("repassword").style.borderColor = "#E34234";
-                                    alert("Passwords do not match. Please key again.");
-                                    ok = false;
-                                } else if (password == repassword) {
-                                    //Check if password length is at least 8
-                                    if (password.length != 0 && password.length < 8) {
-                                        alert("Passwords too short. At least 8 characters.");
+                // Highlight fields with errors
+                function highlightField(fieldId) {
+                    document.getElementById(fieldId).style.borderColor = "#E34234"; // Red border for invalid fields
+                }
+
+                // Reset field borders to default
+                function resetField(fieldId) {
+                    document.getElementById(fieldId).style.borderColor = ""; // Reset to default
+                }
+
+                // Reset all password-related fields
+                resetField('oldPassword');
+                resetField('password');
+                resetField('repassword');
+
+                if (document.getElementById("profileForm").checkValidity()) {
+                    // If any password field is filled, validate all password fields
+                    if (oldPassword !== "" || password !== "" || repassword !== "") {
+                        // Ensure old password is filled
+                        if (oldPassword === "") {
+                            highlightField('oldPassword');
+                            alert("Please enter your old password.");
+                            ok = false;
+                        }
+
+                        // Ensure new password and re-entered password are filled
+                        if (password === "" || repassword === "") {
+                            if (password === "") highlightField('password');
+                            if (repassword === "") highlightField('repassword');
+                            alert("Please fill in both the new password and the re-entered password.");
+                            ok = false;
+                            return
+                        }
+
+                        // Ensure old password matches the stored password
+                        if (ok) {
+                            var memberData = {
+                                id: member.id,
+                                password: oldPassword
+                            };
+
+                            await fetch(new Request('/api/verifyPassword', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: 'Bearer ' + authToken
+                                },
+                                body: JSON.stringify(memberData)
+                            }))
+                                .then(function (response) {
+                                    return response.json();
+                                })
+                                .then(function (data) {
+                                    if (!data.success) {
+                                        highlightField('oldPassword');
+                                        alert("The old password you entered is incorrect.");
                                         ok = false;
                                     }
-                                }
-                            }
-                            else {
-                                alert("Old password is incorrect.");
-                                ok = false;
-                            }
-                        }).catch(function (error) {
-                            console.log(error);
-                        }); 
+                                })
+                                .catch(function (error) {
+                                    console.log(error);
+                                    ok = false;
+                                });
+                        }
+
+                        // Ensure new password and re-entered password match
+                        if (password !== repassword) {
+                            highlightField('password');
+                            highlightField('repassword');
+                            alert("The new password and re-entered password do not match. Please try again.");
+                            ok = false;
+                        }
+
+                        // Ensure new password meets length requirements
+                        if (password.length > 0 && password.length < 8) {
+                            highlightField('password');
+                            alert("The new password must be at least 8 characters long.");
+                            ok = false;
+                        }
                     }
 
-                    if(ok) {
+                    if (ok) {
+                        // If validation passes, proceed to submit the form
                         var data = {
                             email: document.getElementById("email").value,
                             name: document.getElementById("name").value,
@@ -249,32 +298,34 @@
                             securityAnswer: document.getElementById("securityAnswer").value,
                             age: document.getElementById("age").value,
                             income: document.getElementById("income").value,
-                            sla: document.getElementById("serviceLevelAgreement").checked ? 1:0,
-                            password: document.getElementById("password").value
+                            sla: document.getElementById("serviceLevelAgreement").checked ? 1 : 0,
+                            password: password // Include new password only if it's provided
                         };
-                        
-                        fetch(new Request('/api/updateMember',
-                        {
+
+                        fetch(new Request('/api/updateMember', {
                             method: 'PUT',
                             headers: {
                                 'Content-Type': 'application/json',
                                 Authorization: 'Bearer ' + authToken
                             },
                             body: JSON.stringify(data)
-                        })).then(function (response) {
-                            return response.json();
-                        }).then(function (data) {
-                            //update member's info in the session storage
-                            sessionStorage.setItem("member", JSON.stringify(data));
-                            sessionStorage.setItem("memberEmail", data.email);
-                            sessionStorage.setItem("memberName", data.name);
-                            var url = window.location.origin + window.location.pathname;
-                            window.location.href = url + '?goodMsg=Successfully Updated!';
-                        }).catch(function (error) {
-                            console.log(error);
-                            var url = window.location.origin + window.location.pathname;
-                            window.location.href = url + '?errMsg=Unable to Update.';
-                        });
+                        }))
+                            .then(function (response) {
+                                return response.json();
+                            })
+                            .then(function (data) {
+                                // Update member's info in the session storage
+                                sessionStorage.setItem("member", JSON.stringify(data));
+                                sessionStorage.setItem("memberEmail", data.email);
+                                sessionStorage.setItem("memberName", data.name);
+                                var url = window.location.origin + window.location.pathname;
+                                window.location.href = url + '?goodMsg=Successfully Updated!';
+                            })
+                            .catch(function (error) {
+                                console.log(error);
+                                var url = window.location.origin + window.location.pathname;
+                                window.location.href = url + '?errMsg=Unable to Update.';
+                            });
                     }
                 }
             }
@@ -586,8 +637,8 @@
                                         <div class="form-group">
                                             <label>Set Challenge Question</label>
                                             <select id="securityQuestion">
-                                                <option value="1">What is your mother's maiden name?</option>
-                                                <option value="2">What is your first pet's name?</option>
+                                                <option value="1">What is your first pet's name?</option>
+                                                <option value="2">What is your mother's maiden name?</option>
                                                 <option value="3">What is your favourite animal?</option>
                                             </select>
                                             <input class="form-control" type="text" required="true" id="securityAnswer" />
